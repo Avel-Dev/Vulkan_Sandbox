@@ -1,0 +1,60 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# Compiled binaries
+*.exe
+*.out
+*.app
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+
+# Shader binaries
+*.spv
+
+# IDE - VS Code
+.vscode/
+*.code-workspace
+
+# IDE - Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# IDE - CLion
+.idea/
+*.iml
+
+# IDE - Xcode
+*.xcodeproj/
+*.xcworkspace/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Debug/Profiling
+*.pdb
+*.ilk
+*.prof
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~

@@ -253,7 +253,7 @@ auto VulkanRenderer::checkValidationLayerSupport() const -> bool {
             return false;
         }
     }
-    return true;
+    retur  true;
 }
 
 auto VulkanRenderer::getRequiredExtensions() const -> std::vector<const char*> {

@@ -1,10 +1,20 @@
 cmake_minimum_required(VERSION 3.20)
 project(VulkanApp VERSION 1.0.0 LANGUAGES CXX)
+include(FetchContent)
+
+FetchContent_Declare(
+	glm
+	GIT_REPOSITORY	https://github.com/g-truc/glm.git
+	GIT_TAG 	0af55ccecd98d4e5a8d1fad7de25ba429d60e863 #refs/tags/1.0.1
+)
+
+FetchContent_MakeAvailable(glm)
 
 # C++23 Standard
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Default to Debug build
 if(NOT CMAKE_BUILD_TYPE)
@@ -37,6 +47,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Vulkan::Vulkan
     glfw
+    glm::glm
 )
 
 # Debug configuration: enable validation layers

@@ -1,7 +1,7 @@
 #include "Application.h"
 
-#include <print>
 #include <cstdlib>
+#include <print>
 
 /**
  * @brief Entry point for the Vulkan application
@@ -12,30 +12,32 @@
  * - RAII resource management
  * - Clean separation of concerns
  */
+
 int main() {
-    std::println("==============================");
-    std::println("Vulkan Minimal Renderer");
-    std::println("C++23 | Validation Layers | Clean Architecture");
-    std::println("==============================\n");
+	std::println("==============================");
+	std::println("Vulkan Minimal Renderer");
+	std::println("C++23 | Validation Layers | Clean Architecture");
+	std::println("==============================\n");
 
-    try {
-        Application app;
+	try {
+		Application app;
 
-        if (auto result = app.initialize(); !result) {
-            std::println(std::cerr, "Initialization failed: {}", result.error().message);
-            return EXIT_FAILURE;
-        }
+		if (auto result = app.initialize(); !result) {
+			std::println(std::cerr, "Initialization failed: {}",
+				   result.error().message);
+			return EXIT_FAILURE;
+		}
 
-        app.run();
+		app.run();
 
-    } catch (const std::exception& e) {
-        std::println(std::cerr, "Fatal error: {}", e.what());
-        return EXIT_FAILURE;
-    } catch (...) {
-        std::println(std::cerr, "Unknown fatal error occurred");
-        return EXIT_FAILURE;
-    }
+	} catch (const std::exception& e) {
+		std::println(std::cerr, "Fatal error: {}", e.what());
+		return EXIT_FAILURE;
+	} catch (...) {
+		std::println(std::cerr, "Unknown fatal error occurred");
+		return EXIT_FAILURE;
+	}
 
-    std::println("\nGoodbye!");
-    return EXIT_SUCCESS;
+	std::println("\nGoodbye!");
+	return EXIT_SUCCESS;
 }

@@ -1,5 +1,8 @@
 #pragma once
+
+#include <vulkan/vulkan_core.h>
 #define GLFW_INCLUDE_VULKAN
+
 #include <GLFW/glfw3.h>
 #include <array>
 #include <expected>
@@ -8,7 +11,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
 // Validation layer constants
 constexpr std::array VALIDATION_LAYERS = {"VK_LAYER_KHRONOS_validation"};
 
@@ -64,6 +66,9 @@ struct FrameSync {
 /**
  * @brief Minimal Vulkan renderer with validation layers
  */
+
+class Model;
+
 class VulkanRenderer {
         public:
 	VulkanRenderer();
@@ -108,13 +113,14 @@ class VulkanRenderer {
 
         public:
 	static VkDevice device_;
+	static VkPhysicalDevice physicalDevice_;
+	static VkCommandBuffer commandbuffer_;
 
         private:
 	// Vulkan handles
 	VkInstance instance_{VK_NULL_HANDLE};
 	VkDebugUtilsMessengerEXT debugMessenger_{VK_NULL_HANDLE};
 	VkSurfaceKHR surface_{VK_NULL_HANDLE};
-	VkPhysicalDevice physicalDevice_{VK_NULL_HANDLE};
 	VkQueue graphicsQueue_{VK_NULL_HANDLE};
 	VkQueue presentQueue_{VK_NULL_HANDLE};
 	VkSwapchainKHR swapChain_{VK_NULL_HANDLE};
@@ -197,4 +203,6 @@ class VulkanRenderer {
 	debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 		    VkDebugUtilsMessageTypeFlagsEXT messageType,
 		    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+
+	Model* m_model;
 };

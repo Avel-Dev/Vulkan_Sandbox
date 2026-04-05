@@ -30,11 +30,13 @@ set(SOURCES
     src/main.cpp
     src/Application.cpp
     src/VulkanRenderer.cpp
+    src/Model.cpp
 )
 
 set(HEADERS
     src/Application.h
     src/VulkanRenderer.h
+    src/Model.cpp
 )
 
 # Create executable
@@ -85,31 +87,40 @@ find_program(GLSLC_EXECUTABLE glslc PATHS
 if(NOT GLSLC_EXECUTABLE)
     message(FATAL_ERROR "glslc not found. Please install Vulkan SDK.")
 endif()
-
-set(SHADER_FILES
-    ${SHADER_DIR}/triangle.vert
-    ${SHADER_DIR}/triangle.frag
+# Recursively collect all shader files
+file(GLOB_RECURSE SHADER_FILES
+    ${SHADER_DIR}/*.vert
+    ${SHADER_DIR}/*.frag
+    ${SHADER_DIR}/*.comp
 )
 
 set(SPIRV_FILES)
 
 foreach(SHADER ${SHADER_FILES})
-    get_filename_component(FILENAME ${SHADER} NAME)
-    set(SPIRV_FILE ${SPIRV_DIR}/${FILENAME}.spv)
+    # Get path relative to shader root
+    file(RELATIVE_PATH REL_PATH ${SHADER_DIR} ${SHADER})
+
+    # Output file path (preserve directory structure)
+    set(SPIRV_FILE ${SPIRV_DIR}/${REL_PATH}.spv)
+
+    # Create output directory if needed
+    get_filename_component(SPIRV_DIR_PATH ${SPIRV_FILE} DIRECTORY)
+    file(MAKE_DIRECTORY ${SPIRV_DIR_PATH})
+
     list(APPEND SPIRV_FILES ${SPIRV_FILE})
 
     add_custom_command(
         OUTPUT ${SPIRV_FILE}
         COMMAND ${GLSLC_EXECUTABLE} ${SHADER} -o ${SPIRV_FILE}
         DEPENDS ${SHADER}
-        COMMENT "Compiling ${FILENAME}"
+        COMMENT "Compiling ${REL_PATH}"
     )
 endforeach()
 
 add_custom_target(shaders ALL DEPENDS ${SPIRV_FILES})
 add_dependencies(${PROJECT_NAME} shaders)
 
-# Copy shaders to build directory for runtime
+# Pass shader directory to code
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     SHADER_DIR="${SPIRV_DIR}"
 )

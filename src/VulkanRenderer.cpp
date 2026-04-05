@@ -1,5 +1,7 @@
 #include "VulkanRenderer.h"
 
+#include "Model.hpp"
+
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -22,6 +24,9 @@
 // ---------------------------------------------------------------------------
 
 VkDevice VulkanRenderer::device_ = {VK_NULL_HANDLE};
+VkPhysicalDevice VulkanRenderer::physicalDevice_ = {VK_NULL_HANDLE};
+VkCommandBuffer VulkanRenderer::commandbuffer_ = {VK_NULL_HANDLE};
+
 VulkanRenderer::VulkanRenderer() = default;
 
 VulkanRenderer::~VulkanRenderer() {
@@ -98,6 +103,9 @@ auto VulkanRenderer::initialize(GLFWwindow* window) -> std::expected<void, Vulka
 		return std::unexpected(result.error());
 	}
 
+	m_model = new Model();
+	m_model->Init();
+
 	return {};
 }
 
@@ -124,6 +132,8 @@ auto VulkanRenderer::drawFrame() -> std::expected<void, VulkanError> {
 
 	// Record command buffer
 	vkResetCommandBuffer(commandBuffers_[currentFrame_], 0);
+	VulkanRenderer::commandbuffer_ = commandBuffers_[currentFrame_];
+
 	if (auto r = recordCommandBuffer(commandBuffers_[currentFrame_], imageIndex); !r) {
 		return r;
 	}
@@ -701,12 +711,12 @@ auto VulkanRenderer::createRenderPass() -> std::expected<void, VulkanError> {
 
 auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError> {
 	// Load shaders
-	auto vertCode = readFile(SHADER_DIR "/triangle.vert.spv");
+	auto vertCode = readFile(SHADER_DIR "/model/model.vert.spv");
 	if (!vertCode) {
 		return std::unexpected(vertCode.error());
 	}
 
-	auto fragCode = readFile(SHADER_DIR "/triangle.frag.spv");
+	auto fragCode = readFile(SHADER_DIR "/model/model.frag.spv");
 	if (!fragCode) {
 		return std::unexpected(fragCode.error());
 	}
@@ -736,11 +746,17 @@ auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError
 	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo,
 						fragShaderStageInfo};
 
+	VkVertexInputBindingDescription bindingDesc{};
+	bindingDesc.binding = 0;
+	bindingDesc.stride = sizeof(Vertex);
+	bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
 	// Vertex input (no vertices - triangle is generated in vertex shader)
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 0;
 	vertexInputInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDesc;
 
 	// Input assembly
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -941,7 +957,9 @@ auto VulkanRenderer::recordCommandBuffer(VkCommandBuffer buffer, std::uint32_t i
 	scissor.extent = swapChainExtent_;
 	vkCmdSetScissor(buffer, 0, 1, &scissor);
 
-	vkCmdDraw(buffer, 3, 1, 0, 0); // Draw 3 vertices (full-screen triangle)
+	m_model->Bind();
+	m_model->Draw();
+	// vkCmdDraw(buffer, 3, 1, 0, 0); // Draw 3 vertices (full-screen triangle)
 
 	vkCmdEndRenderPass(buffer);
 

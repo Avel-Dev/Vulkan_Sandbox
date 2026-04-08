@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <glm/glm.hpp>		// core types (vec3, mat4, etc.)
+#include <glm/gtc/matrix_transform.hpp> // rotate, lookAt, perspective
 #include <print>
 #include <set>
 #include <vulkan/vulkan_core.h>
@@ -103,6 +105,23 @@ auto VulkanRenderer::initialize(GLFWwindow* window) -> std::expected<void, Vulka
 		return std::unexpected(result.error());
 	}
 
+	// Step 13: Create Uniform Buffers
+	if (auto result = createUniformBuffers(); !result) {
+		return std::unexpected(result.error());
+	}
+
+	auto descriptorSetLayout = createDescriptorSetLayout();
+	if (!descriptorSetLayout) {
+		return std::unexpected(descriptorSetLayout.error());
+	}
+
+	descriptorSetLayout_ = descriptorSetLayout.value();
+	auto descriptorSet = createDiscriptorSets();
+	if (!descriptorSet) {
+		return std::unexpected(descriptorSet.error());
+	}
+	MVP_.resize(MAX_FRAMES_IN_FLIGHT);
+
 	m_model = new Model();
 	m_model->Init();
 
@@ -110,13 +129,18 @@ auto VulkanRenderer::initialize(GLFWwindow* window) -> std::expected<void, Vulka
 }
 
 auto VulkanRenderer::drawFrame() -> std::expected<void, VulkanError> {
-	auto [imageAvailable, renderFinished, inFlight] = syncObjects_[currentFrame_];
+	// Get synchronization objects for this frame
+	auto [imageAvailable, inFlight] = syncObjects_[currentFrame_];
 
-	// Wait for previous frame
+	// Wait for this frame's previous work to complete
 	vkWaitForFences(device_, 1, &inFlight, VK_TRUE, UINT64_MAX);
 
-	// Acquire image from swap chain
+	auto status = update();
+	if (!status) {
+		return status;
+	}
 	std::uint32_t imageIndex{};
+	// Use this frame's imageAvailable semaphore to acquire a swapchain image
 	VkResult result = vkAcquireNextImageKHR(device_, swapChain_, UINT64_MAX, imageAvailable,
 					VK_NULL_HANDLE, &imageIndex);
 
@@ -137,6 +161,9 @@ auto VulkanRenderer::drawFrame() -> std::expected<void, VulkanError> {
 	if (auto r = recordCommandBuffer(commandBuffers_[currentFrame_], imageIndex); !r) {
 		return r;
 	}
+
+	// Use the per-image renderFinished semaphore to avoid semaphore reuse issues
+	VkSemaphore renderFinished = renderFinishedPerImage_[imageIndex];
 
 	// Submit command buffer
 	VkSemaphore waitSemaphores[] = {imageAvailable};
@@ -182,6 +209,38 @@ auto VulkanRenderer::drawFrame() -> std::expected<void, VulkanError> {
 
 	// Advance frame index
 	currentFrame_ = (currentFrame_ + 1) % MAX_FRAMES_IN_FLIGHT;
+
+	return {};
+}
+
+auto VulkanRenderer::update() -> std::expected<void, VulkanError> {
+	return updateUniformBuffers();
+}
+
+auto VulkanRenderer::updateUniformBuffers() -> std::expected<void, VulkanError> {
+	static auto startTime = std::chrono::high_resolution_clock::now();
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float>(currentTime - startTime).count();
+
+	MVP& ubo = MVP_[currentFrame_];
+
+	// rotate cube over time around Y axis
+	ubo.model =
+	  glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+	// camera positioned at (2,2,2) looking at origin
+	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+			   glm::vec3(0.0f, 1.0f, 0.0f));
+
+	// perspective projection
+	ubo.proj =
+	  glm::perspective(glm::radians(45.0f),
+		         swapChainExtent_.width / (float)swapChainExtent_.height, 0.1f, 10.0f);
+
+	// Vulkan Y-axis is flipped vs OpenGL — fix it
+	ubo.proj[1][1] *= -1;
+
+	memcpy(MVP_UniformBuffer[currentFrame_].bufferMapped, &ubo, sizeof(ubo));
 
 	return {};
 }
@@ -396,6 +455,7 @@ auto VulkanRenderer::pickPhysicalDevice() -> std::expected<void, VulkanError> {
 	VkPhysicalDeviceProperties props;
 	vkGetPhysicalDeviceProperties(physicalDevice_, &props);
 	std::println("Selected GPU: {}", props.deviceName);
+	std::println("Push Constants Size: {}", props.limits.maxPushConstantsSize);
 
 	return {};
 }
@@ -746,6 +806,20 @@ auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError
 	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo,
 						fragShaderStageInfo};
 
+	std::array<VkVertexInputAttributeDescription, 2> attrDescs{};
+
+	// position → location 0 in shader
+	attrDescs[0].binding = 0;
+	attrDescs[0].location = 0;
+	attrDescs[0].format = VK_FORMAT_R32G32_SFLOAT;
+	attrDescs[0].offset = offsetof(Vertex, position);
+
+	// color → location 1 in shader
+	attrDescs[1].binding = 0;
+	attrDescs[1].location = 1;
+	attrDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attrDescs[1].offset = offsetof(Vertex, color);
+
 	VkVertexInputBindingDescription bindingDesc{};
 	bindingDesc.binding = 0;
 	bindingDesc.stride = sizeof(Vertex);
@@ -754,7 +828,8 @@ auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError
 	// Vertex input (no vertices - triangle is generated in vertex shader)
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputInfo.vertexAttributeDescriptionCount = 2;
+	vertexInputInfo.pVertexAttributeDescriptions = attrDescs.data();
 	vertexInputInfo.vertexBindingDescriptionCount = 1;
 	vertexInputInfo.pVertexBindingDescriptions = &bindingDesc;
 
@@ -763,7 +838,6 @@ auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
-
 	// Rasterizer
 	VkPipelineRasterizationStateCreateInfo rasterizer{};
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -797,6 +871,15 @@ auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError
 	// Pipeline layout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	auto layoutResult = createDescriptorSetLayout();
+
+	if (!layoutResult) {
+		return std::unexpected(layoutResult.error());
+	}
+
+	VkDescriptorSetLayout layout = layoutResult.value();
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &layout;
 
 	if (vkCreatePipelineLayout(device_, &pipelineLayoutInfo, nullptr, &pipelineLayout_) !=
 	    VK_SUCCESS) {
@@ -810,6 +893,25 @@ auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError
 	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
 	dynamicState.pDynamicStates = dynamicStates.data();
+
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = (float)swapChainExtent_.width;
+	viewport.height = (float)swapChainExtent_.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor{};
+	scissor.offset = {0, 0};
+	scissor.extent = swapChainExtent_;
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = &viewport;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = &scissor;
 
 	// Create pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -825,6 +927,7 @@ auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError
 	pipelineInfo.renderPass = renderPass_;
 	pipelineInfo.subpass = 0;
 	pipelineInfo.pDynamicState = &dynamicState;
+	pipelineInfo.pViewportState = &viewportState;
 
 	if (vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
 				&graphicsPipeline_) != VK_SUCCESS) {
@@ -956,7 +1059,9 @@ auto VulkanRenderer::recordCommandBuffer(VkCommandBuffer buffer, std::uint32_t i
 	scissor.offset = {0, 0};
 	scissor.extent = swapChainExtent_;
 	vkCmdSetScissor(buffer, 0, 1, &scissor);
-
+	vkCmdBindDescriptorSets(commandBuffers_[currentFrame_], VK_PIPELINE_BIND_POINT_GRAPHICS,
+			    pipelineLayout_, 0, 1, &descriptorSets_[currentFrame_], 0,
+			    nullptr);
 	m_model->Bind();
 	m_model->Draw();
 	// vkCmdDraw(buffer, 3, 1, 0, 0); // Draw 3 vertices (full-screen triangle)
@@ -972,6 +1077,7 @@ auto VulkanRenderer::recordCommandBuffer(VkCommandBuffer buffer, std::uint32_t i
 
 auto VulkanRenderer::createSyncObjects() -> std::expected<void, VulkanError> {
 	syncObjects_.resize(MAX_FRAMES_IN_FLIGHT);
+	renderFinishedPerImage_.resize(swapChainImages_.size(), VK_NULL_HANDLE);
 
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -980,14 +1086,22 @@ auto VulkanRenderer::createSyncObjects() -> std::expected<void, VulkanError> {
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
+	// Create per-frame sync objects (imageAvailable semaphores + fences)
 	for (auto& sync : syncObjects_) {
 		if (vkCreateSemaphore(device_, &semaphoreInfo, nullptr, &sync.imageAvailable) !=
-		      VK_SUCCESS ||
-		    vkCreateSemaphore(device_, &semaphoreInfo, nullptr, &sync.renderFinished) !=
 		      VK_SUCCESS ||
 		    vkCreateFence(device_, &fenceInfo, nullptr, &sync.inFlight) != VK_SUCCESS) {
 			return std::unexpected(
 			  VulkanError{"Failed to create synchronization objects"});
+		}
+	}
+
+	// Create per-swapchain-image renderFinished semaphores
+	for (auto& semaphore : renderFinishedPerImage_) {
+		if (vkCreateSemaphore(device_, &semaphoreInfo, nullptr, &semaphore) !=
+		    VK_SUCCESS) {
+			return std::unexpected(
+			  VulkanError{"Failed to create renderFinished semaphore"});
 		}
 	}
 
@@ -1014,6 +1128,24 @@ auto VulkanRenderer::recreateSwapChain() -> std::expected<void, VulkanError> {
 	}
 	if (auto result = createFramebuffers(); !result) {
 		return result;
+	}
+
+	// Recreate per-image renderFinished semaphores
+	for (auto semaphore : renderFinishedPerImage_) {
+		if (semaphore != VK_NULL_HANDLE) {
+			vkDestroySemaphore(device_, semaphore, nullptr);
+		}
+	}
+	renderFinishedPerImage_.resize(swapChainImages_.size(), VK_NULL_HANDLE);
+
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	for (auto& semaphore : renderFinishedPerImage_) {
+		if (vkCreateSemaphore(device_, &semaphoreInfo, nullptr, &semaphore) !=
+		    VK_SUCCESS) {
+			return std::unexpected(VulkanError{
+			  "Failed to create renderFinished semaphore during resize"});
+		}
 	}
 
 	return {};
@@ -1045,13 +1177,18 @@ void VulkanRenderer::cleanup() {
 
 	vkDeviceWaitIdle(device_);
 
-	// Sync objects
+	// Per-image renderFinished semaphores
+	for (auto semaphore : renderFinishedPerImage_) {
+		if (semaphore != VK_NULL_HANDLE) {
+			vkDestroySemaphore(device_, semaphore, nullptr);
+		}
+	}
+	renderFinishedPerImage_.clear();
+
+	// Per-frame sync objects (imageAvailable semaphores + fences)
 	for (auto& sync : syncObjects_) {
 		if (sync.inFlight != VK_NULL_HANDLE) {
 			vkDestroyFence(device_, sync.inFlight, nullptr);
-		}
-		if (sync.renderFinished != VK_NULL_HANDLE) {
-			vkDestroySemaphore(device_, sync.renderFinished, nullptr);
 		}
 		if (sync.imageAvailable != VK_NULL_HANDLE) {
 			vkDestroySemaphore(device_, sync.imageAvailable, nullptr);
@@ -1117,4 +1254,133 @@ auto VulkanRenderer::readFile(const std::string& filename)
 	file.close();
 
 	return buffer;
+}
+
+uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+	VkPhysicalDeviceMemoryProperties memProps;
+	vkGetPhysicalDeviceMemoryProperties(VulkanRenderer::physicalDevice_, &memProps);
+
+	for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
+		if ((typeFilter & (1 << i)) &&
+		    (memProps.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
+	throw std::runtime_error("Failed to find suitable memory type!");
+}
+
+auto VulkanRenderer::createDiscriptorPool() -> std::expected<VkDescriptorPool, VulkanError> {
+	VkDescriptorPoolSize poolSize{};
+	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = 1;
+	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+	VkDescriptorPool descriptorPool;
+	if (vkCreateDescriptorPool(device_, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+		return std::unexpected(VulkanError{"Failed to create descriptor pools"});
+	}
+
+	return descriptorPool;
+}
+
+auto VulkanRenderer::createDiscriptorSets() -> std::expected<void, VulkanError> {
+	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout_);
+
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	auto pool = createDiscriptorPool();
+	if (!pool) {
+		return std::unexpected(pool.error());
+	}
+	allocInfo.descriptorPool = pool.value();
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	allocInfo.pSetLayouts = layouts.data();
+
+	descriptorSets_.resize(MAX_FRAMES_IN_FLIGHT);
+	vkAllocateDescriptorSets(device_, &allocInfo, descriptorSets_.data());
+
+	// write the uniform buffer into each descriptor set
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		VkDescriptorBufferInfo bufferInfo{};
+		bufferInfo.buffer = MVP_UniformBuffer[currentFrame_].uniformBuffer;
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(MVP);
+
+		VkWriteDescriptorSet descriptorWrite{};
+		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite.dstSet = descriptorSets_[i];
+		descriptorWrite.dstBinding = 0;
+		descriptorWrite.dstArrayElement = 0;
+		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrite.descriptorCount = 1;
+		descriptorWrite.pBufferInfo = &bufferInfo;
+
+		vkUpdateDescriptorSets(device_, 1, &descriptorWrite, 0, nullptr);
+	}
+	return {};
+}
+
+auto VulkanRenderer::createDescriptorSetLayout()
+  -> std::expected<VkDescriptorSetLayout, VulkanError> {
+	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	uboLayoutBinding.binding = 0;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	uboLayoutBinding.pImmutableSamplers = nullptr;
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings = &uboLayoutBinding;
+
+	VkDescriptorSetLayout descriptorSetLayout;
+	if (vkCreateDescriptorSetLayout(device_, &layoutInfo, nullptr, &descriptorSetLayout) !=
+	    VK_SUCCESS) {
+		return std::unexpected(VulkanError{"Failed to create Descriptro Sets"});
+	}
+	return descriptorSetLayout;
+}
+
+auto VulkanRenderer::createUniformBuffers() -> std::expected<void, VulkanError> {
+	VkDeviceSize bufferSize = sizeof(MVP);
+
+	MVP_UniformBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (auto& bufferdata : MVP_UniformBuffer) {
+		auto& [uniformBuffer, uniformBufferMemory, bufferMapped] = bufferdata;
+
+		VkBufferCreateInfo bufferInfo{};
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.size = bufferSize;
+		bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		if (vkCreateBuffer(VulkanRenderer::device_, &bufferInfo, nullptr,
+			         &uniformBuffer) != VK_SUCCESS) {
+			return std::unexpected(
+			  VulkanError{"Failed to create Buffer for uniform buffer"});
+		}
+		VkMemoryRequirements memReqs;
+		vkGetBufferMemoryRequirements(VulkanRenderer::device_, uniformBuffer, &memReqs);
+		VkMemoryAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memReqs.size;
+		allocInfo.memoryTypeIndex = findMemoryType(
+		  memReqs.memoryTypeBits,
+		  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		vkAllocateMemory(VulkanRenderer::device_, &allocInfo, nullptr,
+			       &uniformBufferMemory);
+		vkBindBufferMemory(VulkanRenderer::device_, uniformBuffer, uniformBufferMemory,
+			         0);
+		vkMapMemory(device_, uniformBufferMemory, 0, bufferInfo.size, 0, &bufferMapped);
+	}
+
+	return {};
 }

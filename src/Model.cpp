@@ -2,39 +2,11 @@
 
 #include "VulkanRenderer.h"
 
-#include <array>
 #include <cstring>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
-uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-	VkPhysicalDeviceMemoryProperties memProps;
-	vkGetPhysicalDeviceMemoryProperties(VulkanRenderer::physicalDevice_, &memProps);
-
-	for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
-		if ((typeFilter & (1 << i)) &&
-		    (memProps.memoryTypes[i].propertyFlags & properties) == properties) {
-			return i;
-		}
-	}
-	throw std::runtime_error("Failed to find suitable memory type!");
-}
-
 void Model::Init() {
-	std::array<VkVertexInputAttributeDescription, 2> attrDescs{};
-
-	// position → location 0 in shader
-	attrDescs[0].binding = 0;
-	attrDescs[0].location = 0;
-	attrDescs[0].format = VK_FORMAT_R32G32_SFLOAT;
-	attrDescs[0].offset = offsetof(Vertex, position);
-
-	// color → location 1 in shader
-	attrDescs[1].binding = 0;
-	attrDescs[1].location = 1;
-	attrDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	attrDescs[1].offset = offsetof(Vertex, color);
-
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.size = sizeof(vertices[0]) * vertices.size();
@@ -93,7 +65,7 @@ void Model::Bind() {
 	vkCmdBindVertexBuffers(VulkanRenderer::commandbuffer_, 0, 1, &m_VertexBuffer, offsets);
 
 	vkCmdBindIndexBuffer(VulkanRenderer::commandbuffer_, m_IndexBuffer, 0,
-			 VK_INDEX_TYPE_UINT32);
+			 VK_INDEX_TYPE_UINT16);
 }
 
 void Model::Draw() {

@@ -16,39 +16,25 @@ class Model {
 	void Draw();
 
         private:
-	std::vector<Vertex> vertices = {
-	  // Front face
-	  {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}},
-	  {{0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-	  {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	  {{-0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 0.0f}},
-
-	  // Back face
-	  {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}},
-	  {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
-	  {{0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-	  {{-0.5f, 0.5f, -0.5f}, {0.2f, 0.2f, 0.2f}},
+	const std::vector<Vertex> vertices = {
+	  // position              // color
+	  {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}}, // 0
+	  {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},  // 1
+	  {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},   // 2
+	  {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}},  // 3
+	  {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 1.0f}},  // 4
+	  {{0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 1.0f}},   // 5
+	  {{0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}},    // 6
+	  {{-0.5f, 0.5f, 0.5f}, {0.5f, 0.5f, 0.5f}},   // 7
 	};
-
-	std::vector<uint16_t> indices = {
-	  // Front
-	  0, 1, 2, 2, 3, 0,
-
-	  // Right
-	  1, 5, 6, 6, 2, 1,
-
-	  // Back
-	  5, 4, 7, 7, 6, 5,
-
-	  // Left
-	  4, 0, 3, 3, 7, 4,
-
-	  // Top
-	  3, 2, 6, 6, 7, 3,
-
-	  // Bottom
-	  4, 5, 1, 1, 0, 4};
-
+	const std::vector<uint16_t> indices = {
+	  0, 1, 2, 2, 3, 0, // back face
+	  4, 5, 6, 6, 7, 4, // front face
+	  0, 4, 7, 7, 3, 0, // left face
+	  1, 5, 6, 6, 2, 1, // right face
+	  3, 7, 6, 6, 2, 3, // top face
+	  0, 4, 5, 5, 1, 0	// bottom face
+	};
 	VkBuffer m_VertexBuffer;
 	VkDeviceMemory m_VertexBufferMemory;
 

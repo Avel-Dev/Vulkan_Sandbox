@@ -1,5 +1,7 @@
 #pragma once
 
+#include "glm/ext/matrix_float4x4.hpp"
+
 #include <vulkan/vulkan_core.h>
 #define GLFW_INCLUDE_VULKAN
 
@@ -33,6 +35,19 @@ struct VulkanError {
 	VkResult result{VK_SUCCESS};
 };
 
+// MVP
+struct MVP {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
+
+struct UniformBuffer {
+	VkBuffer uniformBuffer;
+	VkDeviceMemory uniformBufferMemory;
+	void* bufferMapped;
+};
+
 /**
  * @brief Queue family indices for device selection
  */
@@ -56,16 +71,19 @@ struct SwapChainSupportDetails {
 
 /**
  * @brief Frame synchronization objects
+ * Note: renderFinished semaphore is per-swapchain-image, not per-frame,
+ * to avoid semaphore reuse validation errors.
  */
 struct FrameSync {
 	VkSemaphore imageAvailable{VK_NULL_HANDLE};
-	VkSemaphore renderFinished{VK_NULL_HANDLE};
 	VkFence inFlight{VK_NULL_HANDLE};
 };
 
 /**
  * @brief Minimal Vulkan renderer with validation layers
  */
+
+uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 class Model;
 
@@ -91,6 +109,8 @@ class VulkanRenderer {
 	 * @brief Render a single frame
 	 */
 	auto drawFrame() -> std::expected<void, VulkanError>;
+	auto update() -> std::expected<void, VulkanError>;
+	auto updateUniformBuffers() -> std::expected<void, VulkanError>;
 
 	/**
 	 * @brief Handle window resize
@@ -133,11 +153,17 @@ class VulkanRenderer {
 	VkPipeline graphicsPipeline_{VK_NULL_HANDLE};
 	std::vector<VkFramebuffer> framebuffers_;
 	VkCommandPool commandPool_{VK_NULL_HANDLE};
+	VkDescriptorSetLayout descriptorSetLayout_;
+	std::vector<VkDescriptorSet> descriptorSets_;
 	std::vector<VkCommandBuffer> commandBuffers_;
 	std::vector<FrameSync> syncObjects_;
+	std::vector<VkSemaphore> renderFinishedPerImage_;
 
+	std::vector<MVP> MVP_;
+	std::vector<UniformBuffer> MVP_UniformBuffer;
 	// State
 	GLFWwindow* window_{nullptr};
+
 	bool framebufferResized_{false};
 	std::uint32_t currentFrame_{0};
 	static constexpr std::uint32_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -185,6 +211,11 @@ class VulkanRenderer {
 	[[nodiscard]] auto recordCommandBuffer(VkCommandBuffer buffer, std::uint32_t imageIndex)
 	  -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto createSyncObjects() -> std::expected<void, VulkanError>;
+	[[nodiscard]] auto createDescriptorSetLayout()
+	  -> std::expected<VkDescriptorSetLayout, VulkanError>;
+	[[nodiscard]] auto createDiscriptorPool() -> std::expected<VkDescriptorPool, VulkanError>;
+	[[nodiscard]] auto createDiscriptorSets() -> std::expected<void, VulkanError>;
+	[[nodiscard]] auto createUniformBuffers() -> std::expected<void, VulkanError>;
 
 	// --- Resize handling ---
 	[[nodiscard]] auto recreateSwapChain() -> std::expected<void, VulkanError>;

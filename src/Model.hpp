@@ -14,6 +14,8 @@ class Model {
 	void Init();
 	void Bind();
 	void Draw();
+	void createbuffer(VkDeviceSize size, VkBuffer& buffer, VkDeviceMemory& deviceMemory,
+		        VkBufferUsageFlags usage);
 
         private:
 	const std::vector<Vertex> vertices = {

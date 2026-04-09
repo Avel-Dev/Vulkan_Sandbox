@@ -6,25 +6,18 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
-void Model::Init() {
+void Model::createbuffer(VkDeviceSize size, VkBuffer& buffer, VkDeviceMemory& deviceMemory,
+		     VkBufferUsageFlags usage) {
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = sizeof(vertices[0]) * vertices.size();
-	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	bufferInfo.size = size;
+	bufferInfo.usage = usage;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	vkCreateBuffer(VulkanRenderer::device_, &bufferInfo, nullptr, &m_VertexBuffer);
-
-	VkBufferCreateInfo indexBufferInfo{};
-	indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	indexBufferInfo.size = sizeof(indices[0]) * indices.size();
-	indexBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-	indexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	vkCreateBuffer(VulkanRenderer::device_, &indexBufferInfo, nullptr, &m_IndexBuffer);
+	vkCreateBuffer(VulkanRenderer::device_, &bufferInfo, nullptr, &buffer);
 
 	VkMemoryRequirements memReqs;
-	vkGetBufferMemoryRequirements(VulkanRenderer::device_, m_VertexBuffer, &memReqs);
+	vkGetBufferMemoryRequirements(VulkanRenderer::device_, buffer, &memReqs);
 
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -33,30 +26,30 @@ void Model::Init() {
 	  findMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
 					   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-	vkAllocateMemory(VulkanRenderer::device_, &allocInfo, nullptr, &m_VertexBufferMemory);
-	vkBindBufferMemory(VulkanRenderer::device_, m_VertexBuffer, m_VertexBufferMemory, 0);
+	vkAllocateMemory(VulkanRenderer::device_, &allocInfo, nullptr, &deviceMemory);
+	vkBindBufferMemory(VulkanRenderer::device_, buffer, deviceMemory, 0);
+}
 
-	VkMemoryRequirements i_memReqs;
-	vkGetBufferMemoryRequirements(VulkanRenderer::device_, m_VertexBuffer, &i_memReqs);
+void Model::Init() {
+	auto vertexBufferSize = sizeof(vertices[0]) * vertices.size();
+	auto indexBufferSize = sizeof(indices[0]) * indices.size();
 
-	VkMemoryAllocateInfo i_allocInfo{};
-	i_allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	i_allocInfo.allocationSize = i_memReqs.size;
-	i_allocInfo.memoryTypeIndex =
-	  findMemoryType(i_memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-					     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	createbuffer(vertexBufferSize, m_VertexBuffer, m_VertexBufferMemory,
+		   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 
-	vkAllocateMemory(VulkanRenderer::device_, &i_allocInfo, nullptr, &m_IndexBufferMemory);
-	vkBindBufferMemory(VulkanRenderer::device_, m_IndexBuffer, m_IndexBufferMemory, 0);
+	createbuffer(indexBufferSize, m_IndexBuffer, m_IndexBufferMemory,
+		   VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+
+	VkMemoryRequirements memReqs;
+	vkGetBufferMemoryRequirements(VulkanRenderer::device_, m_VertexBuffer, &memReqs);
 
 	void* data;
-	vkMapMemory(VulkanRenderer::device_, m_VertexBufferMemory, 0, bufferInfo.size, 0, &data);
-	memcpy(data, vertices.data(), (size_t)bufferInfo.size);
+	vkMapMemory(VulkanRenderer::device_, m_VertexBufferMemory, 0, vertexBufferSize, 0, &data);
+	memcpy(data, vertices.data(), vertexBufferSize);
 	vkUnmapMemory(VulkanRenderer::device_, m_VertexBufferMemory);
 
-	vkMapMemory(VulkanRenderer::device_, m_IndexBufferMemory, 0, indexBufferInfo.size, 0,
-		  &data);
-	memcpy(data, indices.data(), (size_t)indexBufferInfo.size);
+	vkMapMemory(VulkanRenderer::device_, m_IndexBufferMemory, 0, indexBufferSize, 0, &data);
+	memcpy(data, indices.data(), indexBufferSize);
 	vkUnmapMemory(VulkanRenderer::device_, m_IndexBufferMemory);
 }
 

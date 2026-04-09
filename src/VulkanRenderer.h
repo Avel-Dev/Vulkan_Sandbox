@@ -158,7 +158,9 @@ class VulkanRenderer {
 	std::vector<VkCommandBuffer> commandBuffers_;
 	std::vector<FrameSync> syncObjects_;
 	std::vector<VkSemaphore> renderFinishedPerImage_;
-
+	VkImage depthImage_;
+	VkDeviceMemory depthImageMemory_;
+	VkImageView depthImageView_;
 	std::vector<MVP> MVP_;
 	std::vector<UniformBuffer> MVP_UniformBuffer;
 	// State
@@ -216,6 +218,7 @@ class VulkanRenderer {
 	[[nodiscard]] auto createDiscriptorPool() -> std::expected<VkDescriptorPool, VulkanError>;
 	[[nodiscard]] auto createDiscriptorSets() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto createUniformBuffers() -> std::expected<void, VulkanError>;
+	[[nodiscard]] auto createDepthResources() -> std::expected<void, VulkanError>;
 
 	// --- Resize handling ---
 	[[nodiscard]] auto recreateSwapChain() -> std::expected<void, VulkanError>;

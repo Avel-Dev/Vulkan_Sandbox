@@ -14,10 +14,10 @@ void Model::createbuffer(VkDeviceSize size, VkBuffer& buffer, VkDeviceMemory& de
 	bufferInfo.usage = usage;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	vkCreateBuffer(VulkanRenderer::device_, &bufferInfo, nullptr, &buffer);
+	vkCreateBuffer(VulkanRenderer::s_device, &bufferInfo, nullptr, &buffer);
 
 	VkMemoryRequirements memReqs;
-	vkGetBufferMemoryRequirements(VulkanRenderer::device_, buffer, &memReqs);
+	vkGetBufferMemoryRequirements(VulkanRenderer::s_device, buffer, &memReqs);
 
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -26,8 +26,8 @@ void Model::createbuffer(VkDeviceSize size, VkBuffer& buffer, VkDeviceMemory& de
 	  findMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
 					   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-	vkAllocateMemory(VulkanRenderer::device_, &allocInfo, nullptr, &deviceMemory);
-	vkBindBufferMemory(VulkanRenderer::device_, buffer, deviceMemory, 0);
+	vkAllocateMemory(VulkanRenderer::s_device, &allocInfo, nullptr, &deviceMemory);
+	vkBindBufferMemory(VulkanRenderer::s_device, buffer, deviceMemory, 0);
 }
 
 void Model::Init() {
@@ -40,25 +40,25 @@ void Model::Init() {
 	createbuffer(indexBufferSize, m_IndexBuffer, m_IndexBufferMemory,
 		   VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 	void* data;
-	vkMapMemory(VulkanRenderer::device_, m_VertexBufferMemory, 0, vertexBufferSize, 0, &data);
+	vkMapMemory(VulkanRenderer::s_device, m_VertexBufferMemory, 0, vertexBufferSize, 0, &data);
 	memcpy(data, vertices.data(), vertexBufferSize);
-	vkUnmapMemory(VulkanRenderer::device_, m_VertexBufferMemory);
+	vkUnmapMemory(VulkanRenderer::s_device, m_VertexBufferMemory);
 
-	vkMapMemory(VulkanRenderer::device_, m_IndexBufferMemory, 0, indexBufferSize, 0, &data);
+	vkMapMemory(VulkanRenderer::s_device, m_IndexBufferMemory, 0, indexBufferSize, 0, &data);
 	memcpy(data, indices.data(), indexBufferSize);
-	vkUnmapMemory(VulkanRenderer::device_, m_IndexBufferMemory);
+	vkUnmapMemory(VulkanRenderer::s_device, m_IndexBufferMemory);
 }
 
 void Model::Bind() {
 	VkDeviceSize offsets[] = {0};
-	vkCmdBindVertexBuffers(VulkanRenderer::commandbuffer_, 0, 1, &m_VertexBuffer, offsets);
+	vkCmdBindVertexBuffers(VulkanRenderer::s_commandBuffer, 0, 1, &m_VertexBuffer, offsets);
 
-	vkCmdBindIndexBuffer(VulkanRenderer::commandbuffer_, m_IndexBuffer, 0,
+	vkCmdBindIndexBuffer(VulkanRenderer::s_commandBuffer, m_IndexBuffer, 0,
 			 VK_INDEX_TYPE_UINT16);
 }
 
 void Model::Draw() {
-	vkCmdDrawIndexed(VulkanRenderer::commandbuffer_,
+	vkCmdDrawIndexed(VulkanRenderer::s_commandBuffer,
 		       static_cast<uint32_t>(indices.size()), // indexCount
 		       1,				      // instanceCount
 		       0,				      // firstIndex

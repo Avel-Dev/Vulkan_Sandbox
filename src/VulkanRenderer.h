@@ -1,7 +1,7 @@
 #pragma once
-
 #include "glm/ext/matrix_float4x4.hpp"
 
+#include <Camera.hpp>
 #include <vulkan/vulkan_core.h>
 #define GLFW_INCLUDE_VULKAN
 
@@ -36,11 +36,6 @@ struct VulkanError {
 // MVP
 struct MVP {
 	glm::mat4 model;
-};
-
-struct Camera {
-	glm::mat4 view;
-	glm::mat4 proj;
 };
 
 struct UniformBuffer {
@@ -93,57 +88,42 @@ class VulkanRenderer {
 	VulkanRenderer();
 	~VulkanRenderer();
 
-	// Non-copyable, non-movable
 	VulkanRenderer(const VulkanRenderer&) = delete;
 	VulkanRenderer& operator=(const VulkanRenderer&) = delete;
 	VulkanRenderer(VulkanRenderer&&) = delete;
 	VulkanRenderer& operator=(VulkanRenderer&&) = delete;
 
-	/**
-	 * @brief Initialize the Vulkan renderer
-	 * @param window GLFW window handle
-	 * @return Expected void or VulkanError
-	 */
 	[[nodiscard]] auto initialize(GLFWwindow* window) -> std::expected<void, VulkanError>;
 
-	/**
-	 * @brief Render a single frame
-	 */
 	auto drawFrame() -> std::expected<void, VulkanError>;
 	auto update() -> std::expected<void, VulkanError>;
 	auto updateUniformBuffers() -> std::expected<void, VulkanError>;
 
-	/**
-	 * @brief Handle window resize
-	 */
 	[[nodiscard]] auto onWindowResized() -> std::expected<void, VulkanError>;
 
-	/**
-	 * @brief Check if framebuffer was resized
-	 */
 	[[nodiscard]] auto wasResized() const noexcept -> bool {
 		return framebufferResized_;
 	}
 
-	/**
-	 * @brief Set framebuffer resize flag
-	 */
 	void setResized(bool resized) noexcept {
 		framebufferResized_ = resized;
 	}
 
         public:
-	static VkDevice device_;
-	static VkPhysicalDevice physicalDevice_;
-	static VkCommandBuffer commandbuffer_;
+	static VkDevice s_device;
+	static VkPhysicalDevice s_physicalDevice;
+	static VkCommandBuffer s_commandBuffer;
 
         private:
-	// Vulkan handles
+	// Vulkan core
 	VkInstance instance_{VK_NULL_HANDLE};
 	VkDebugUtilsMessengerEXT debugMessenger_{VK_NULL_HANDLE};
 	VkSurfaceKHR surface_{VK_NULL_HANDLE};
+
 	VkQueue graphicsQueue_{VK_NULL_HANDLE};
 	VkQueue presentQueue_{VK_NULL_HANDLE};
+
+	// Swapchain
 	VkSwapchainKHR swapChain_{VK_NULL_HANDLE};
 	VkFormat swapChainImageFormat_{VK_FORMAT_UNDEFINED};
 	VkExtent2D swapChainExtent_{};
@@ -151,41 +131,49 @@ class VulkanRenderer {
 	std::vector<VkImage> swapChainImages_;
 	std::vector<VkImageView> swapChainImageViews_;
 
+	// Pipeline
 	VkRenderPass renderPass_{VK_NULL_HANDLE};
 	VkPipelineLayout pipelineLayout_{VK_NULL_HANDLE};
 	VkPipeline graphicsPipeline_{VK_NULL_HANDLE};
 
 	std::vector<VkFramebuffer> framebuffers_;
 
+	// Commands & descriptors
 	VkCommandPool commandPool_{VK_NULL_HANDLE};
-	VkDescriptorSetLayout descriptorSetLayout_;
+	VkDescriptorSetLayout descriptorSetLayout_{VK_NULL_HANDLE};
 	std::vector<VkDescriptorSet> descriptorSets_;
 	std::vector<VkCommandBuffer> commandBuffers_;
+
+	// Sync
 	std::vector<FrameSync> syncObjects_;
 	std::vector<VkSemaphore> renderFinishedPerImage_;
 
-	VkImage depthImage_;
-	VkDeviceMemory depthImageMemory_;
-	VkImageView depthImageView_;
-	std::vector<MVP> MVP_;
-	std::vector<UniformBuffer> MVP_UniformBuffer;
+	// Depth
+	VkImage depthImage_{VK_NULL_HANDLE};
+	VkDeviceMemory depthImageMemory_{VK_NULL_HANDLE};
+	VkImageView depthImageView_{VK_NULL_HANDLE};
+
+	// Uniforms
+	std::vector<MVP> mvpData_;
+	std::vector<UniformBuffer> mvpUniformBuffers_;
+
 	// State
 	GLFWwindow* window_{nullptr};
-
 	bool framebufferResized_{false};
-	std::uint32_t currentFrame_{0};
-	static constexpr std::uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
-	// --- Instance creation ---
+	std::uint32_t currentFrame_{0};
+	static constexpr std::uint32_t kMaxFramesInFlight = 2;
+
+	// --- Instance ---
 	[[nodiscard]] auto createInstance() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto checkValidationLayerSupport() const -> bool;
 	[[nodiscard]] auto getRequiredExtensions() const -> std::vector<const char*>;
 
-	// --- Debug messenger ---
+	// --- Debug ---
 	[[nodiscard]] auto setupDebugMessenger() -> std::expected<void, VulkanError>;
 	void populateDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT& info) const;
 
-	// --- Surface & Device ---
+	// --- Device ---
 	[[nodiscard]] auto createSurface() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto pickPhysicalDevice() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto isDeviceSuitable(VkPhysicalDevice device) const -> bool;
@@ -195,7 +183,7 @@ class VulkanRenderer {
 	  -> SwapChainSupportDetails;
 	[[nodiscard]] auto createLogicalDevice() -> std::expected<void, VulkanError>;
 
-	// --- Swap chain ---
+	// --- Swapchain ---
 	[[nodiscard]] auto createSwapChain() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto
 	chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const
@@ -206,44 +194,49 @@ class VulkanRenderer {
 	  -> VkExtent2D;
 	[[nodiscard]] auto createImageViews() -> std::expected<void, VulkanError>;
 
-	// --- Graphics pipeline ---
+	// --- Pipeline ---
 	[[nodiscard]] auto createRenderPass() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto createGraphicsPipeline() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto createShaderModule(const std::vector<char>& code) const
 	  -> std::expected<VkShaderModule, VulkanError>;
 	[[nodiscard]] auto createFramebuffers() -> std::expected<void, VulkanError>;
 
-	// --- Commands & Sync ---
+	// --- Commands ---
 	[[nodiscard]] auto createCommandPool() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto createCommandBuffers() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto recordCommandBuffer(VkCommandBuffer buffer, std::uint32_t imageIndex)
 	  -> std::expected<void, VulkanError>;
+
+	// --- Sync ---
 	[[nodiscard]] auto createSyncObjects() -> std::expected<void, VulkanError>;
+
+	// --- Descriptors ---
 	[[nodiscard]] auto createDescriptorSetLayout()
 	  -> std::expected<VkDescriptorSetLayout, VulkanError>;
-	[[nodiscard]] auto createDiscriptorPool() -> std::expected<VkDescriptorPool, VulkanError>;
-	[[nodiscard]] auto createDiscriptorSets() -> std::expected<void, VulkanError>;
+	[[nodiscard]] auto createDescriptorPool() -> std::expected<VkDescriptorPool, VulkanError>;
+	[[nodiscard]] auto createDescriptorSets() -> std::expected<void, VulkanError>;
 	[[nodiscard]] auto createUniformBuffers() -> std::expected<void, VulkanError>;
+
+	// --- Depth ---
 	[[nodiscard]] auto createDepthResources() -> std::expected<void, VulkanError>;
 
-	// --- Resize handling ---
+	// --- Resize ---
 	[[nodiscard]] auto recreateSwapChain() -> std::expected<void, VulkanError>;
 	void cleanupSwapChain();
 
-	// --- Resource cleanup ---
+	// --- Cleanup ---
 	void destroyDebugMessenger();
 	void cleanup();
 
-	// --- Utilities ---
+	// --- Utils ---
 	[[nodiscard]] static auto readFile(const std::string& filename)
 	  -> std::expected<std::vector<char>, VulkanError>;
 
-	// --- Static callback for debug messenger ---
-	static VKAPI_ATTR VkBool32 VKAPI_CALL
-	debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-		    VkDebugUtilsMessageTypeFlagsEXT messageType,
-		    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+	  VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
+	  const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData);
 
-	Model* m_model;
-	Camera m_camera;
+	// Scene
+	Model* model_{nullptr};
+	CameraController camera_;
 };

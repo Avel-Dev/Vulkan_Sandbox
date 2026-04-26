@@ -1,6 +1,7 @@
 #include "VulkanRenderer.h"
 
 #include "Model.hpp"
+#include "glm/ext/matrix_float4x4.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -8,6 +9,7 @@
 #include <fstream>
 #include <glm/glm.hpp>		// core types (vec3, mat4, etc.)
 #include <glm/gtc/matrix_transform.hpp> // rotate, lookAt, perspective
+#include <iostream>
 #include <print>
 #include <set>
 #include <vulkan/vulkan_core.h>
@@ -222,25 +224,23 @@ auto VulkanRenderer::update() -> std::expected<void, VulkanError> {
 auto VulkanRenderer::updateUniformBuffers() -> std::expected<void, VulkanError> {
 	static auto startTime = std::chrono::high_resolution_clock::now();
 	auto currentTime = std::chrono::high_resolution_clock::now();
-	float time = std::chrono::duration<float>(currentTime - startTime).count();
 
 	MVP& ubo = MVP_[currentFrame_];
 
 	// rotate cube over time around Y axis
-	ubo.model =
-	  glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	ubo.model = glm::mat4(1.0f);
 
 	// camera positioned at (2,2,2) looking at origin
-	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-			   glm::vec3(0.0f, 1.0f, 0.0f));
+	m_camera.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+			        glm::vec3(0.0f, 1.0f, 0.0f));
 
 	// perspective projection
-	ubo.proj =
+	m_camera.proj =
 	  glm::perspective(glm::radians(45.0f),
 		         swapChainExtent_.width / (float)swapChainExtent_.height, 0.1f, 10.0f);
 
 	// Vulkan Y-axis is flipped vs OpenGL — fix it
-	ubo.proj[1][1] *= -1;
+	m_camera.proj[1][1] *= -1;
 
 	memcpy(MVP_UniformBuffer[currentFrame_].bufferMapped, &ubo, sizeof(ubo));
 
@@ -950,7 +950,7 @@ auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError
 	rasterizer.rasterizerDiscardEnable = VK_FALSE;
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 	rasterizer.lineWidth = 1.0f;
 
@@ -976,7 +976,7 @@ auto VulkanRenderer::createGraphicsPipeline() -> std::expected<void, VulkanError
 	VkPushConstantRange pushConstantRange{};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // used in vertex shader
 	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(float); // your angle
+	pushConstantRange.size = sizeof(Camera);
 	// Pipeline layout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1144,18 +1144,12 @@ auto VulkanRenderer::recordCommandBuffer(VkCommandBuffer buffer, std::uint32_t i
 	if (vkBeginCommandBuffer(buffer, &beginInfo) != VK_SUCCESS) {
 		return std::unexpected(VulkanError{"Failed to begin recording command buffer"});
 	}
-	float angle = glfwGetTime();
 
-	vkCmdPushConstants(buffer, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float),
-		         &angle);
-	// Dynamic clear color (subtle animation based on time)
-	auto time = std::chrono::steady_clock::now().time_since_epoch().count();
-	float r = 0.2f + 0.1f * std::sin(time / 1e9f);
-	float g = 0.3f + 0.1f * std::sin(time / 1e9f + 2.0f);
-	float b = 0.5f + 0.1f * std::sin(time / 1e9f + 4.0f);
+	vkCmdPushConstants(buffer, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Camera),
+		         &m_camera);
 
 	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = {{r, g, b, 1.0f}};
+	clearValues[0].color = {{0, 0, 0, 1.0f}};
 	clearValues[1].depthStencil = {1.0f, 0};
 
 	VkRenderPassBeginInfo renderPassInfo{};

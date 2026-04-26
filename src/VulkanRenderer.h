@@ -8,9 +8,7 @@
 #include <GLFW/glfw3.h>
 #include <array>
 #include <expected>
-#include <iostream>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <vector>
 // Validation layer constants
@@ -38,6 +36,9 @@ struct VulkanError {
 // MVP
 struct MVP {
 	glm::mat4 model;
+};
+
+struct Camera {
 	glm::mat4 view;
 	glm::mat4 proj;
 };
@@ -144,20 +145,25 @@ class VulkanRenderer {
 	VkQueue graphicsQueue_{VK_NULL_HANDLE};
 	VkQueue presentQueue_{VK_NULL_HANDLE};
 	VkSwapchainKHR swapChain_{VK_NULL_HANDLE};
-	std::vector<VkImage> swapChainImages_;
 	VkFormat swapChainImageFormat_{VK_FORMAT_UNDEFINED};
 	VkExtent2D swapChainExtent_{};
+
+	std::vector<VkImage> swapChainImages_;
 	std::vector<VkImageView> swapChainImageViews_;
+
 	VkRenderPass renderPass_{VK_NULL_HANDLE};
 	VkPipelineLayout pipelineLayout_{VK_NULL_HANDLE};
 	VkPipeline graphicsPipeline_{VK_NULL_HANDLE};
+
 	std::vector<VkFramebuffer> framebuffers_;
+
 	VkCommandPool commandPool_{VK_NULL_HANDLE};
 	VkDescriptorSetLayout descriptorSetLayout_;
 	std::vector<VkDescriptorSet> descriptorSets_;
 	std::vector<VkCommandBuffer> commandBuffers_;
 	std::vector<FrameSync> syncObjects_;
 	std::vector<VkSemaphore> renderFinishedPerImage_;
+
 	VkImage depthImage_;
 	VkDeviceMemory depthImageMemory_;
 	VkImageView depthImageView_;
@@ -239,4 +245,5 @@ class VulkanRenderer {
 		    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 
 	Model* m_model;
+	Camera m_camera;
 };

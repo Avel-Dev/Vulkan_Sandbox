@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include <cstdlib>
+#include <iostream>
 #include <print>
 
 /**

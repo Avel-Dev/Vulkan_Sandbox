@@ -30,13 +30,23 @@ class Model {
 	  {{-0.5f, 0.5f, 0.5f}, {0.5f, 0.5f, 0.5f}},   // 7
 	};
 	const std::vector<uint16_t> indices = {
-	  0, 1, 2, 2, 3, 0, // back face
-	  4, 5, 6, 6, 7, 4, // front face
-	  0, 4, 7, 7, 3, 0, // left face
-	  1, 5, 6, 6, 2, 1, // right face
-	  3, 7, 6, 6, 2, 3, // top face
-	  0, 4, 5, 5, 1, 0	// bottom face
-	};
+	  // back (-Z)
+	  0, 2, 1, 0, 3, 2,
+
+	  // front (+Z)
+	  4, 5, 6, 4, 6, 7,
+
+	  // left (-X)
+	  0, 7, 3, 0, 4, 7,
+
+	  // right (+X)
+	  1, 2, 6, 1, 6, 5,
+
+	  // top (+Y)
+	  3, 7, 6, 3, 6, 2,
+
+	  // bottom (-Y)
+	  0, 1, 5, 0, 5, 4};
 	VkBuffer m_VertexBuffer;
 	VkDeviceMemory m_VertexBufferMemory;
 

@@ -39,10 +39,6 @@ void Model::Init() {
 
 	createbuffer(indexBufferSize, m_IndexBuffer, m_IndexBufferMemory,
 		   VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-
-	VkMemoryRequirements memReqs;
-	vkGetBufferMemoryRequirements(VulkanRenderer::device_, m_VertexBuffer, &memReqs);
-
 	void* data;
 	vkMapMemory(VulkanRenderer::device_, m_VertexBufferMemory, 0, vertexBufferSize, 0, &data);
 	memcpy(data, vertices.data(), vertexBufferSize);

@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include <cmath>
+#include <iostream>
 #include <print>
 
 // ---------------------------------------------------------------------------
